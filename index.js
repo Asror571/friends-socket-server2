@@ -1,7 +1,7 @@
 import { Server } from "socket.io"
 import { createServer } from "http"
 
-const users = []
+const websockets = []
 
 const httpServer = createServer()
 const io = new Server( httpServer, {
@@ -11,14 +11,14 @@ const io = new Server( httpServer, {
 	}
 } )
 
-httpServer.listen( 80, () => {
+httpServer.listen( 3_000, () => {
 
 	console.log( "Server listening on port 3000" )
 } )
 
 io.on( "connection", user => {
 
-	users.push( user )
+	websockets.push( user )
 
 	user.on( "new_user", user => {
 
@@ -34,9 +34,9 @@ io.on( "connection", user => {
 			}
 		}
 
-		for ( const user of users ) {
+		for ( const websocket of websockets ) {
 
-			user.emit( "new_user", geoJSON )
+			websocket.emit( "new_user", geoJSON )
 		}
 	} )
 
