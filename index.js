@@ -39,11 +39,17 @@ io.on("connection", websocket => {
 	websockets.push(websocket)
 
 	websocket.on("new_user", user => {
+
+		console.log( user )
+
 		const userGeoJSON = {
 			type: "Feature",
 			properties: {
 				username: user.username,
-				avatar: user.avatar,
+				avatar: {
+					type: user.file.type,
+					arrayBuffer: user.file.arrayBuffer,
+				},
 			},
 			geometry: {
 				type: "Point",
