@@ -3,6 +3,11 @@ import { createServer } from "http"
 
 const websockets = []
 
+const usersGeoJSONCollection = {
+	type: "FeatureCollection",
+	features: [],
+}
+
 const httpServer = createServer()
 const io = new Server( httpServer, {
 	cors: {
@@ -16,13 +21,13 @@ httpServer.listen( 3_000, () => {
 	console.log( "Server listening on port 3000" )
 } )
 
-io.on( "connection", user => {
+io.on( "connection", websocket => {
 
-	websockets.push( user )
+	websockets.push( websocket )
 
-	user.on( "new_user", user => {
+	websocket.on( "new_user", user => {
 
-		const geoJSON = {
+		const userGeoJSON = {
 			type: "Feature",
 			properties: {
 				username: user.username,
@@ -34,9 +39,16 @@ io.on( "connection", user => {
 			}
 		}
 
-		for ( const websocket of websockets ) {
+		usersGeoJSONCollection.features.push( userGeoJSON )
 
-			websocket.emit( "new_user", geoJSON )
+		websocket.emit( "new_user", usersGeoJSONCollection )
+
+		for ( const _websocket of websockets ) {
+
+			if ( websocket.id !== _websocket.id ) {
+
+				_websocket.emit( "new_user", userGeoJSON )
+			}
 		}
 	} )
 
