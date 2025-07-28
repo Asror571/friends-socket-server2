@@ -16,17 +16,17 @@ const io = new Server( httpServer, {
 	}
 } )
 
-httpServer.listen( 8080, () => {
+// Render.com ning PORT environment variable ni ishlatish
+const PORT = process.env.PORT || 3000
 
-	console.log( "Server listening on port 3000" )
+httpServer.listen( PORT, '0.0.0.0', () => {
+	console.log( `Server listening on port ${PORT}` )
 } )
 
 io.on( "connection", websocket => {
-
 	websockets.push( websocket )
 
 	websocket.on( "new_user", user => {
-
 		const userGeoJSON = {
 			type: "Feature",
 			properties: {
@@ -40,13 +40,10 @@ io.on( "connection", websocket => {
 		}
 
 		usersGeoJSONCollection.features.push( userGeoJSON )
-
 		websocket.emit( "new_user", usersGeoJSONCollection )
 
 		for ( const _websocket of websockets ) {
-
 			if ( websocket.id !== _websocket.id ) {
-
 				_websocket.emit( "new_user", userGeoJSON )
 			}
 		}
