@@ -38,9 +38,12 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 io.on("connection", websocket => {
 	websockets.push(websocket)
 
-	websocket.on("new_user", user => {
+	websocket.on( "init", () => {
 
-		console.log( user )
+		websocket.emit( "init", usersGeoJSONCollection )
+	} )
+
+	websocket.on("new_user", user => {
 
 		const userGeoJSON = {
 			type: "Feature",
@@ -50,6 +53,7 @@ io.on("connection", websocket => {
 					type: user.file.type,
 					arrayBuffer: user.file.arrayBuffer,
 				},
+				joinedAt: new Date(),
 			},
 			geometry: {
 				type: "Point",
@@ -58,11 +62,32 @@ io.on("connection", websocket => {
 		}
 
 		usersGeoJSONCollection.features.push(userGeoJSON)
+
+		usersGeoJSONCollection.features.sort( ( user1, user2 ) => user2.properties.joinedAt.getTime() - user1.properties.joinedAt.getTime() )
+
+		let updated = false
+
+		if ( usersGeoJSONCollection.features.length > 2 ) {
+
+			usersGeoJSONCollection.features.pop()
+			updated = true
+		}
+
 		websocket.emit("new_user", usersGeoJSONCollection)
+		
+		if ( updated ) {
+
+			websocket.emit("update_users", usersGeoJSONCollection)
+		}
 
 		for (const _websocket of websockets) {
 			if (websocket.id !== _websocket.id) {
 				_websocket.emit("new_user", userGeoJSON)
+				
+				if ( updated ) {
+
+					_websocket.emit("update_users", usersGeoJSONCollection)
+				}
 			}
 		}
 	})
