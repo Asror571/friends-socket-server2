@@ -1,6 +1,8 @@
 import { Server } from "socket.io"
 import { createServer } from "http"
 
+const MAX_ONLINE_USERS = 100
+
 const websockets = []
 
 const usersGeoJSONCollection = {
@@ -67,7 +69,7 @@ io.on("connection", websocket => {
 
 		let updated = false
 
-		if ( usersGeoJSONCollection.features.length > 2 ) {
+		if ( usersGeoJSONCollection.features.length > MAX_ONLINE_USERS ) {
 
 			usersGeoJSONCollection.features.pop()
 			updated = true
