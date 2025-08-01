@@ -1,23 +1,44 @@
 import { Server } from "socket.io"
 import { createServer } from "http"
+import { randomUUID } from "crypto"
 
-const MAX_ONLINE_USERS = 100
+// Users Map: userId -> { geoJSON }
+const users = new Map()
 
-const websockets = []
-
-const usersGeoJSONCollection = {
-	type: "FeatureCollection",
-	features: [],
+// Helper function to check if a username is already taken (case-insensitive)
+function isUsernameTaken(username) {
+	const lowerCaseUsername = username.toLowerCase()
+	for (const user of users.values()) {
+		if (user.geoJSON.properties.username.toLowerCase() === lowerCaseUsername) {
+			return true
+		}
+	}
+	return false
 }
 
-// HTTP server uchun basic routing
+// Helper function to get all users as a GeoJSON Feature Collection
+function getUsersAsGeoJSON() {
+	const features = Array.from(users.values()).map(user => user.geoJSON)
+	features.sort((a, b) => new Date(b.properties.joinedAt) - new Date(a.properties.joinedAt))
+	return {
+		type: "FeatureCollection",
+		features: features,
+	}
+}
+
+// Helper function to broadcast updates to all users
+function broadcastUpdates() {
+	const usersGeoJSON = getUsersAsGeoJSON()
+	io.emit("update_users", usersGeoJSON)
+}
+
 const httpServer = createServer((req, res) => {
 	if (req.url === '/') {
 		res.writeHead(200, { 'Content-Type': 'text/plain' })
 		res.end('Socket.IO server is running')
 	} else if (req.url === '/health') {
 		res.writeHead(200, { 'Content-Type': 'application/json' })
-		res.end(JSON.stringify({ status: 'ok', users: usersGeoJSONCollection.features.length }))
+		res.end(JSON.stringify({ status: 'ok', users: users.size }))
 	} else {
 		res.writeHead(404, { 'Content-Type': 'text/plain' })
 		res.end('Not Found')
@@ -37,25 +58,32 @@ httpServer.listen(PORT, '0.0.0.0', () => {
 	console.log(`Server listening on port ${PORT}`)
 })
 
-io.on("connection", websocket => {
-	websockets.push(websocket)
+io.on("connection", socket => {
+	console.log(`New connection: ${socket.id}`)
 
-	websocket.on( "init", () => {
+	socket.emit("update_users", getUsersAsGeoJSON())
 
-		websocket.emit( "init", usersGeoJSONCollection )
-	} )
+	socket.on("new_user", user => {
+		// --- Username Validation ---
+		if (isUsernameTaken(user.username)) {
+			socket.emit("username_taken", { message: "This username is already taken. Please choose another." })
+			return // Stop execution
+		}
+		// --- End Validation ---
 
-	websocket.on("new_user", user => {
+		const userId = randomUUID()
+		socket.userId = userId
 
 		const userGeoJSON = {
 			type: "Feature",
 			properties: {
+				userId: userId,
 				username: user.username,
 				avatar: {
 					type: user.file.type,
 					arrayBuffer: user.file.arrayBuffer,
 				},
-				joinedAt: new Date(),
+				joinedAt: new Date().toISOString(),
 			},
 			geometry: {
 				type: "Point",
@@ -63,43 +91,34 @@ io.on("connection", websocket => {
 			}
 		}
 
-		usersGeoJSONCollection.features.push(userGeoJSON)
+		users.set(userId, { geoJSON: userGeoJSON })
+		socket.emit("you_joined", userGeoJSON)
+		broadcastUpdates()
+	})
 
-		usersGeoJSONCollection.features.sort( ( user1, user2 ) => user2.properties.joinedAt.getTime() - user1.properties.joinedAt.getTime() )
+	socket.on("send_message", ({ recipientId, message }) => {
+		const senderId = socket.userId
+		if (!senderId) return
 
-		let updated = false
-
-		if ( usersGeoJSONCollection.features.length > MAX_ONLINE_USERS ) {
-
-			usersGeoJSONCollection.features.pop()
-			updated = true
-		}
-
-		websocket.emit("new_user", usersGeoJSONCollection)
-		
-		if ( updated ) {
-
-			websocket.emit("update_users", usersGeoJSONCollection)
-		}
-
-		for (const _websocket of websockets) {
-			if (websocket.id !== _websocket.id) {
-				_websocket.emit("new_user", userGeoJSON)
-				
-				if ( updated ) {
-
-					_websocket.emit("update_users", usersGeoJSONCollection)
-				}
+		for (const [id, targetSocket] of io.sockets.sockets) {
+			if (targetSocket.userId === recipientId) {
+				targetSocket.emit("receive_message", { senderId, message })
+				break
 			}
 		}
 	})
 
-	websocket.on("disconnect", () => {
-		const index = websockets.indexOf(websocket)
-		if (index > -1) {
-			websockets.splice(index, 1)
-		}
+	socket.on("user_exit", () => {
+		socket.disconnect(true)
 	})
 
-	console.log("New user connected")
+	socket.on("disconnect", () => {
+		const userId = socket.userId
+		if (userId && users.has(userId)) {
+			const username = users.get(userId).geoJSON.properties.username
+			console.log(`User ${username} (${userId}) disconnected`)
+			users.delete(userId)
+			broadcastUpdates()
+		}
+	})
 })
