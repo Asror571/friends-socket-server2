@@ -47,7 +47,7 @@ const httpServer = createServer((req, res) => {
 
 const io = new Server(httpServer, {
 	cors: {
-		origin: "*",
+		origin: "https://friends-web2.vercel.app",
 		methods: ["GET", "POST"],
 	}
 })
