@@ -5,7 +5,7 @@
 	"main": "index.js",
 	"type": "module",
 	"scripts": {
-		"dev": "node --watch index.js",
+		"dev": "nodemon index.js",
 		"start": "node index.js"
 	},
 	"keywords": [],
@@ -14,5 +14,8 @@
 	"packageManager": "pnpm@10.13.1",
 	"dependencies": {
 		"socket.io": "^4.8.1"
+	},
+	"devDependencies": {
+		"nodemon": "^3.1.10"
 	}
 }
